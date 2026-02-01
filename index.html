@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Estoque App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root{
+  --roxo:#6d28d9;
+  --roxo-escuro:#4c1d95;
+  --fundo:#f5f3ff;
+  --branco:#ffffff;
+  --cinza:#e5e7eb;
+  --texto:#1f2937;
+  --vermelho:#dc2626;
+  --verde:#16a34a;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+
+body{
+  background:var(--fundo);
+  color:var(--texto);
+}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,var(--roxo),var(--roxo-escuro));
+  color:white;
+  padding:20px;
+  border-radius:0 0 24px 24px;
+}
+header h1{font-size:20px;}
+header p{font-size:13px;opacity:.9}
+
+/* CONTAINER */
+.container{padding:16px;max-width:480px;margin:auto}
+
+/* DASHBOARD */
+.dashboard{
+  background:white;
+  margin-top:-30px;
+  border-radius:20px;
+  padding:16px;
+  box-shadow:0 10px 25px rgba(0,0,0,.12);
+}
+
+.cards{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:12px;
+  margin-bottom:16px;
+}
+
+.card{
+  background:var(--fundo);
+  border-radius:16px;
+  padding:14px;
+}
+.card span{font-size:12px;color:#6b7280}
+.card strong{font-size:20px}
+
+/* CATEGORIAS */
+.categorias{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  margin:16px 0;
+}
+.cat{
+  padding:8px 14px;
+  border-radius:999px;
+  background:var(--cinza);
+  font-size:13px;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.cat.ativa{
+  background:var(--roxo);
+  color:white;
+}
+
+/* PRODUTOS */
+.produto{
+  background:white;
+  border-radius:16px;
+  padding:14px;
+  margin-bottom:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.produto small{color:#6b7280}
+.produto strong.baixo{color:var(--vermelho)}
+
+.botoes button{
+  border:none;
+  background:none;
+  font-size:18px;
+  margin-left:6px;
+  cursor:pointer;
+}
+
+/* FORM */
+form{
+  background:white;
+  border-radius:20px;
+  padding:16px;
+  margin-top:16px;
+}
+form h3{margin-bottom:10px}
+input,select{
+  width:100%;
+  padding:10px;
+  border-radius:12px;
+  border:1px solid var(--cinza);
+  margin-bottom:10px;
+}
+form button{
+  width:100%;
+  padding:12px;
+  border-radius:14px;
+  border:none;
+  background:var(--roxo);
+  color:white;
+  font-weight:600;
+}
+
+/* HISTORICO */
+.historico{
+  background:white;
+  border-radius:20px;
+  padding:16px;
+  margin-top:16px;
+}
+.log{
+  font-size:13px;
+  padding:8px 0;
+  border-bottom:1px solid var(--cinza);
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>📦 Meu Estoque</h1>
+  <p>Controle simples, visual e profissional</p>
+</header>
+
+<div class="container">
+
+  <div class="dashboard">
+    <div class="cards">
+      <div class="card"><span>Produtos</span><strong id="totalProd">0</strong></div>
+      <div class="card"><span>Estoque baixo</span><strong id="baixo">0</strong></div>
+    </div>
+    <canvas id="grafico"></canvas>
+  </div>
+
+  <div class="categorias" id="cats"></div>
+
+  <div id="lista"></div>
+
+  <form onsubmit="event.preventDefault();addProduto()">
+    <h3>Novo Produto</h3>
+    <input id="nome" placeholder="Nome do produto">
+    <input id="qtd" type="number" placeholder="Quantidade">
+    <input id="min" type="number" placeholder="Estoque mínimo">
+    <input id="cat" placeholder="Categoria (ex: Bebidas)">
+    <button>Adicionar</button>
+  </form>
+
+  <div class="historico">
+    <h3>Histórico</h3>
+    <input type="date" id="filtroData" onchange="render()">
+    <div id="logs"></div>
+  </div>
+
+</div>
+
+<script>
+let produtos=JSON.parse(localStorage.getItem("produtos"))||[];
+let logs=JSON.parse(localStorage.getItem("logs"))||[];
+let filtroCat="Todos";
+
+function salvar(){
+  localStorage.setItem("produtos",JSON.stringify(produtos));
+  localStorage.setItem("logs",JSON.stringify(logs));
+  render();
+}
+
+function addProduto(){
+  produtos.push({
+    nome:nome.value,
+    qtd:+qtd.value,
+    min:+min.value,
+    cat:cat.value
+  });
+  logs.unshift(`➕ ${nome.value} cadastrado (${new Date().toLocaleDateString()})`);
+  nome.value=qtd.value=min.value=cat.value="";
+  salvar();
+}
+
+function mov(i,t){
+  produtos[i].qtd+=t;
+  logs.unshift(`${t>0?"➕":"➖"} ${produtos[i].nome} (${new Date().toLocaleDateString()})`);
+  salvar();
+}
+
+function render(){
+  // categorias
+  const cats=[...new Set(produtos.map(p=>p.cat))];
+  cats.unshift("Todos");
+  document.getElementById("cats").innerHTML=cats.map(c=>`<div class="cat ${c==filtroCat?"ativa":""}" onclick="filtroCat='${c}';render()">${c}</div>`).join("");
+
+  // lista
+  lista.innerHTML="";
+  let baixo=0;
+  produtos.forEach((p,i)=>{
+    if(filtroCat!="Todos" && p.cat!=filtroCat)return;
+    if(p.qtd<=p.min)baixo++;
+    lista.innerHTML+=`
+    <div class="produto">
+      <div>
+        <strong class="${p.qtd<=p.min?"baixo":""}">${p.nome}</strong><br>
+        <small>${p.cat} • ${p.qtd} un</small>
+      </div>
+      <div class="botoes">
+        <button onclick="mov(${i},1)">➕</button>
+        <button onclick="mov(${i},-1)">➖</button>
+      </div>
+    </div>`;
+  });
+
+  totalProd.innerText=produtos.length;
+  baixo.innerText=baixo;
+
+  // historico
+  const f=document.getElementById("filtroData").value;
+  logsDiv=document.getElementById("logs");
+  logsDiv.innerHTML="";
+  logs.filter(l=>!f||l.includes(f.split("-").reverse().join("/")))
+      .forEach(l=>logsDiv.innerHTML+=`<div class="log">${l}</div>`);
+
+  grafico();
+}
+
+let chart;
+function grafico(){
+  const ctx=document.getElementById("grafico");
+  if(chart)chart.destroy();
+  chart=new Chart(ctx,{
+    type:"doughnut",
+    data:{
+      labels:produtos.map(p=>p.nome),
+      datasets:[{data:produtos.map(p=>p.qtd),backgroundColor:["#6d28d9","#8b5cf6","#a78bfa","#c4b5fd"]}]
+    }
+  });
+}
+
+render();
+</script>
+
+</body>
+</html>
